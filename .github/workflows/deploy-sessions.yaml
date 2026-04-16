@@ -1,0 +1,73 @@
+name: Deploy Scheduled Sessions to ACP
+
+on:
+  push:
+    branches: [main]
+    paths:
+    - 'scheduled-sessions/*.json'
+  workflow_dispatch:
+    inputs:
+      session_file:
+        description: 'Session file to deploy (e.g. weekly-status-rollup.json). Leave empty to deploy all changed files.'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Identify session files to deploy
+        id: files
+        run: |
+          if [ -n "${{ inputs.session_file }}" ]; then
+            echo "files=scheduled-sessions/${{ inputs.session_file }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'scheduled-sessions/*.json' | tr '\n' ' ')
+            echo "files=$CHANGED" >> "$GITHUB_OUTPUT"
+          else
+            CHANGED=$(ls scheduled-sessions/*.json 2>/dev/null | tr '\n' ' ')
+            echo "files=$CHANGED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to ACP
+        if: steps.files.outputs.files != ''
+        env:
+          ACP_API: ${{ secrets.ACP_API }}
+          ACP_TOKEN: ${{ secrets.ACP_TOKEN }}
+          ACP_PROJECT: ${{ secrets.ACP_PROJECT }}
+        run: |
+          for file in ${{ steps.files.outputs.files }}; do
+            if [ ! -f "$file" ]; then
+              echo "::warning::File $file not found, skipping"
+              continue
+            fi
+
+            NAME=$(jq -r '.displayName' "$file")
+            echo "Deploying: $NAME ($file)"
+
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              "$ACP_API/api/projects/$ACP_PROJECT/scheduled-sessions" \
+              -H "Authorization: Bearer $ACP_TOKEN" \
+              -H "X-Forwarded-Access-Token: $ACP_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @"$file")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Deployed successfully (HTTP $HTTP_CODE)"
+              echo "$BODY" | jq '{name: .name, schedule: .schedule, displayName: .displayName}' 2>/dev/null || true
+            elif [ "$HTTP_CODE" -eq 409 ]; then
+              echo "::notice::Session '$NAME' already exists (HTTP 409). Delete and recreate if you need to update it."
+            else
+              echo "::error::Failed to deploy '$NAME' (HTTP $HTTP_CODE)"
+              echo "$BODY"
+              exit 1
+            fi
+          done
