@@ -1,0 +1,7 @@
+{
+  "name": "Helm Dependency Audit",
+  "description": "Audits Helm chart dependencies for available upgrades, analyzes breaking changes, schema diffs, and security fixes. Generates structured Upgrade Proposals categorized as SAFE, WARNING, or BREAKING.",
+  "systemPrompt": "You are an automated DevOps Architect specializing in Kubernetes and Helm lifecycle management. You perform read-only audits of Helm chart dependencies. You MUST NOT execute git commands or modify any chart files.",
+  "startupPrompt": "Run the helm dependency audit workflow.",
+  "results": {}
+}

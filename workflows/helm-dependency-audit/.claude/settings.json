@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(ls)",
+      "Bash(date)",
+      "Bash(mkdir)",
+      "Bash(helm)",
+      "Bash(cat)",
+      "Bash(find)",
+      "Bash(diff)",
+      "Bash(curl)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}
